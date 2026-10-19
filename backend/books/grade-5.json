@@ -1,0 +1,13 @@
+{
+  "grade": "5",
+  "textbooks": ["/Users/stepan/Desktop/Print 174 pages.pdf"],
+  "guide": { "markdown": "books/grade-5-guide.md" },
+  "chapter_files": {
+    "1": "01-gluxh1-bnakan-tver-koordinatayin-charagayt.md",
+    "2": "02-gluxh2-gorcoghutyunner-bnakan-tverov.md",
+    "3": "03-gluxh3-maserov-khndirner.md",
+    "4": "04-gluxh4-chapman-miavorner.md",
+    "5": "05-gluxh5-bazhaneliutyun.md",
+    "6": "06-gluxh6-kotorakner.md"
+  }
+}

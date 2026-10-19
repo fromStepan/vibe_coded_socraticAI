@@ -1,0 +1,8 @@
+{
+  "grade": "4",
+  "textbooks": [
+    "/Users/stepan/Desktop/4_դասարան_մաթեմ.pdf",
+    "/Users/stepan/Desktop/4_դասարան_մաթեմ_2.pdf"
+  ],
+  "guide": { "pdf": "/Users/stepan/Desktop/4_դասարան_մեթոդական_ուղեցույց.pdf", "pages": [99, 229] }
+}
