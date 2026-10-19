@@ -192,7 +192,8 @@ function GuardPanel({ message }: { message: Message }) {
             )}
           >
             {rejected.length ? <ShieldAlert className="w-3 h-3" /> : <ShieldCheck className="w-3 h-3" />}
-            {rejected.length ? `Պահակը արգելափակեց ${rejected.length} տարբերակ` : 'Պահակն անցավ 1-ին փորձից'}
+            {rejected.length ? `Պահակը արգելափակեց ${rejected.length} տարբերակ`
+              : guard.some((g) => g.method === 'style') ? 'Պահակն անցավ, ոճը կրճատվեց' : 'Պահակն անցավ 1-ին փորձից'}
           </button>
         )}
         {message.type === 'fallback' && (
@@ -210,9 +211,11 @@ function GuardPanel({ message }: { message: Message }) {
       {open && (
         <div className="space-y-2 w-full">
           {guard.map((g) => (
-            <div key={g.attempt} className={cn('rounded-xl border p-3 text-sm', g.leaked ? 'border-destructive/30 bg-destructive/5' : 'border-success/30 bg-success/5')}>
+            <div key={`${g.attempt}-${g.method}`} className={cn('rounded-xl border p-3 text-sm',
+              g.leaked ? 'border-destructive/30 bg-destructive/5'
+                : g.method === 'style' ? 'border-warning/40 bg-warning/10' : 'border-success/30 bg-success/5')}>
               <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-1">
-                Փորձ {g.attempt} · {g.method} · {g.leaked ? 'ԱՐԳԵԼՎԱԾ' : 'ԹՈՒՅԼԱՏՐՎԱԾ'}
+                Փորձ {g.attempt} · {g.method} · {g.leaked ? 'ԱՐԳԵԼՎԱԾ' : g.method === 'style' ? 'ՎԵՐԱՁԵՎՎԱԾ (երկար/պաշտոնական)' : 'ԹՈՒՅԼԱՏՐՎԱԾ'}
               </div>
               {g.draft && <p className="text-foreground whitespace-pre-wrap">{g.draft}</p>}
               {g.reason && <p className="text-xs text-muted-foreground mt-1 italic">{g.reason}</p>}

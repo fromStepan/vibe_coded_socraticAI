@@ -171,6 +171,12 @@ export default function NewTask() {
                 <div className="flex items-center gap-2 mb-2 text-xs font-bold uppercase tracking-wider text-primary">
                   <BookOpen className="w-3.5 h-3.5" /> {e.topic}
                   {e.lesson && <span className="text-muted-foreground normal-case font-medium tracking-normal">· {e.lesson}</span>}
+                  {e.extra && (
+                    <span className="normal-case tracking-normal font-semibold px-2 py-0.5 rounded-full bg-warning/15 text-warning-foreground"
+                      title="Ուսուցչի կազմած լրացուցիչ խնդիր այս դասի համար">
+                      ✨ լրացուցիչ
+                    </span>
+                  )}
                   {busy === e.id && <Loader2 className="w-4 h-4 animate-spin ml-auto" />}
                 </div>
                 <p className="text-foreground font-medium whitespace-pre-line line-clamp-4">{e.text}</p>

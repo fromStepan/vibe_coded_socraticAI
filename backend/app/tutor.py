@@ -201,10 +201,13 @@ async def safe_reply(messages: list[dict], problem: str, correct_answer: str, fi
     """Retries run on a scratch copy, so a leaked draft never enters the real history."""
     result = GuardedReply(text="")
     working = list(messages)
-    for attempt in range(MAX_LEAK_RETRIES + 1):
-        reply = first_draft if (attempt == 0 and first_draft) else await draft_reply(working)
+    leak_tries, style_retried, safe_draft = 0, False, None
+    while leak_tries <= MAX_LEAK_RETRIES:
+        number = len(result.attempts) + 1
+        reply = first_draft if (number == 1 and first_draft) else await draft_reply(working)
         if not reply:
-            result.attempts.append(GuardAttempt(attempt + 1, "", True, "empty", "Model returned an empty reply."))
+            leak_tries += 1
+            result.attempts.append(GuardAttempt(number, "", True, "empty", "Model returned an empty reply."))
             continue
 
         reason = deterministic_leak(reply, problem, correct_answer)
@@ -213,18 +216,58 @@ async def safe_reply(messages: list[dict], problem: str, correct_answer: str, fi
         else:
             leaked, reason = await judge_leak(problem, correct_answer, reply)
             method = "llm-judge"
-        result.attempts.append(GuardAttempt(attempt + 1, reply, leaked, method, reason))
 
-        if not leaked:
-            result.text = reply
-            return result
+        if leaked:
+            leak_tries += 1
+            result.attempts.append(GuardAttempt(number, reply, True, method, reason))
+            log.info("leak guard: attempt %d rejected by %s: %s", number, method, reason)
+            working = working + [
+                {"role": "assistant", "content": reply},
+                {"role": "user", "content": prompts.render("leak_retry_notice.md", reason=reason or "not specified")},
+            ]
+            continue
 
-        log.info("leak guard: attempt %d rejected by %s: %s", attempt + 1, method, reason)
-        working = working + [
-            {"role": "assistant", "content": reply},
-            {"role": "user", "content": prompts.render("leak_retry_notice.md", reason=reason or "not specified")},
-        ]
+        safe_draft = reply
+        style = style_problem(reply)
+        if style and not style_retried:
+            # One rewrite for child-friendliness; the rewrite must pass the leak guard again.
+            style_retried = True
+            result.attempts.append(GuardAttempt(number, reply, False, "style", style))
+            working = working + [
+                {"role": "assistant", "content": reply},
+                {"role": "user", "content": prompts.render("style_retry_notice.md", reason=style)},
+            ]
+            continue
 
+        result.attempts.append(GuardAttempt(number, reply, False, method, reason))
+        result.text = reply
+        return result
+
+    if safe_draft:
+        # The style rewrite leaked: the earlier leak-safe draft is better than the canned fallback.
+        result.text = safe_draft
+        return result
     result.text = prompts.fallback_reply()
     result.used_fallback = True
     return result
+
+
+_FORMAL = re.compile(
+    r"(?<![\u0531-\u0587])(?:Դուք|Ձեր|Ձեզ|Ներեցե՛?ք|Եկե՛?ք|Փորձե՛?ք|Մտածե՛?ք|Հաշվե՛?ք|Գրե՛?ք|Ասե՛?ք|Նայե՛?ք|Գտե՛?ք|"
+    r"Ստուգե՛?ք|Պատասխանե՛?ք|Կարդացե՛?ք|Հիշե՛?ք)(?![\u0531-\u0587])",
+    re.IGNORECASE,
+)
+MAX_REPLY_CHARS = 230
+
+
+def style_problem(reply: str) -> str | None:
+    """Child-friendliness rules the prompt asks for: one question, about two lines, informal «դու»."""
+    problems = []
+    sentences = re.split(r"(?<=[։.!?])\s+|\n+", reply.strip())
+    if (questions := sum(("՞" in s or "?" in s) for s in sentences)) > 1:
+        problems.append(f"it asks {questions} questions instead of one")
+    if len(reply) > MAX_REPLY_CHARS:
+        problems.append(f"it is {len(reply)} characters long (the limit is about {MAX_REPLY_CHARS}, two short lines)")
+    if m := _FORMAL.search(reply):
+        problems.append(f"it uses the formal form «{m.group()}» instead of informal «դու»")
+    return "; ".join(problems) or None

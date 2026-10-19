@@ -70,7 +70,7 @@ export type TurnResult = {
   correct: boolean | null;
 };
 
-export type Exercise = { id: number; chapter: number; topic: string; lesson: string; text: string };
+export type Exercise = { id: number; chapter: number; topic: string; lesson: string; text: string; extra: boolean };
 
 export type AdminUser = User & { createdAt: string; chats: number; solved: number; lastActive: string | null };
 

@@ -363,6 +363,36 @@ def attach_guide(lessons: list[Lesson], text: str) -> None:
             by_id[lesson_id].guide = _tidy("\n\n".join(parts))[:GUIDE_SECTION_LIMIT]
 
 
+AI_GUIDE_PROMPT = """You are an experienced Armenian primary/middle-school math teacher. The teacher's guide for this
+grade {grade} textbook has no section for lesson {id} «{title}», so write one, in Armenian, in the same spirit:
+- Նպատակը (goal) in one sentence;
+- the key ideas/definitions/methods the lesson teaches, as the textbook presents them;
+- how to lead a student to them Socratically: a short sequence of guiding questions, from easy to harder;
+- 2–3 typical mistakes students make here and a question that helps them notice each one.
+Do NOT solve or give answers to the lesson's exercises. At most 1500 characters. Return only the text.
+
+LESSON TEXT:
+{text}"""
+
+_LATEX_DELIMITERS = re.compile(r"\\[()\[\]]")
+
+AI_GUIDE_NOTE = "(Այս դասը ուսուցչի ուղեցույցում չկա. ստորև բերված ցուցումները կազմել է AI-ը՝ դասագրքի նյութի հիման վրա։)"
+
+
+async def fill_missing_guides(cfg: dict, lessons: list[Lesson], build: Path) -> None:
+    path = build / "ai_guides.json"
+    cached = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+
+    async def one(l: Lesson):
+        if l.id not in cached:
+            cached[l.id] = (await ask(PAGE_MODEL, AI_GUIDE_PROMPT.format(
+                grade=cfg["grade"], id=l.id, title=l.title, text=l.text[:8000]))).strip()
+        l.guide = f"{AI_GUIDE_NOTE}\n\n{_LATEX_DELIMITERS.sub('', cached[l.id])}"
+
+    await asyncio.gather(*(one(l) for l in lessons if not l.guide))
+    path.write_text(json.dumps(cached, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 # ---------- stage 4: summaries & chapters ----------
 
 LESSON_SUMMARY_PROMPT = """Below is lesson {id} «{title}» of an Armenian grade {grade} math textbook.
@@ -504,6 +534,10 @@ async def build(cfg: dict) -> None:
     print("[3/5] teacher's guide …", flush=True)
     attach_guide(lessons, await guide_text(cfg, out_dir))
     print(f"      guide sections matched for {sum(bool(l.guide) for l in lessons)}/{len(lessons)} lessons", flush=True)
+    missing = [l.id for l in lessons if not l.guide]
+    if missing:
+        print(f"      writing AI teacher's notes for lessons without a guide section: {', '.join(missing)}", flush=True)
+        await fill_missing_guides(cfg, lessons, out_dir)
     print("[4/5] summaries …", flush=True)
     chapter_titles = await stage_summaries(cfg, lessons, chapters, out_dir)
     print("[5/5] writing output …", flush=True)

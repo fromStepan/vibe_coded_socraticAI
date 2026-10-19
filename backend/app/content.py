@@ -152,6 +152,7 @@ def public_exercises(grade: str) -> list[dict]:
             "topic": topic_for(grade, units) if (units := units_for_exercise(grade, e)) else "",
             "lesson": e.get("lesson_title_hy", ""),
             "text": e["question_hy"],
+            "extra": e.get("origin") == "ai-made",
         }
         for e in exercises(grade)
     ]

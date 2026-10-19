@@ -39,6 +39,9 @@ Needs `uv` and `pnpm` (both already installed on this Mac) and an API key in `.e
    - *number scan*: blocks the draft if it contains the answer or an equivalent form (19/12 = 1 7/12, 1,5 = 3/2 …);
    - *LLM-as-judge* (`prompts/leak_check.md`): blocks direct leaks, "one step away" replies and confirm/deny of values;
    - blocked → rewrite with `prompts/leak_retry_notice.md` (up to 2 times) → else a safe fallback question.
+   - *style check* (free, after the leak checks): at most one question, about two short lines, informal «դու».
+     A reply that breaks these gets one rewrite (`prompts/style_retry_notice.md`), and the rewrite must pass the
+     leak guard again. Style is soft: if the rewrite still breaks it, the leak-safe reply is used anyway.
 5. **Answer check** (`prompts/answer_compare.md`) runs on the "I know the answer" button *and* on normal chat
    messages, so a correct answer is recognised however the student writes it.
 
@@ -92,6 +95,22 @@ instead of about 20,000 for whole chapters. If the lesson step fails, it falls b
 ```bash
 cd backend && uv run python -m app.tools.route_eval   # grade 5: router vs the 20 labelled exercises
 ```
+
+**Gaps are filled the way a teacher would fill them.** Lessons with no teacher's-guide section get an AI-written
+Socratic teaching note, clearly marked as such. Grades whose book has no answer pages (grade 4) get their
+"Դասագրքից" list from `app.tools.build_exercises`:
+- suitable exercises are picked from each lesson;
+- each is solved twice, by `gpt-5.5` reasoning step by step and by `gpt-4.1` with the calculator;
+- only exercises where both answers agree are kept;
+- lessons left with fewer than 4 exercises get new teacher-made problems, shown as «✨ լրացուցիչ» and checked the
+  same way.
+
+```bash
+cd backend && uv run python -m app.tools.build_exercises --grade 4 --replace
+```
+
+**Admins can test any grade.** On the New task page, the yellow «Փորձարկել որպես … դասարանցի» bar chooses the
+grade for that test chat.
 
 ## Adding a new book or grade
 

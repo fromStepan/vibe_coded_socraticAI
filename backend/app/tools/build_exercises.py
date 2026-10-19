@@ -6,6 +6,8 @@
            (oral, group, drawing, measuring and "make up a problem" tasks are skipped)
 2. solve   each exercise is solved twice, independently: gpt-5.5 reasoning step by step, gpt-4.1 with the calculator
 3. keep    only exercises where both answers agree; the answer is stored as "ai-verified"
+4. fill    lessons left with fewer than 4 get new teacher-made problems in the lesson's style ("ai-made"),
+           which go through the same double check
 
 Results are cached under build/grade-N/exercises/, so an interrupted run resumes.
 Writes content/grade-N/exercises.json, but never replaces an existing hand-made list unless --replace is given.
@@ -104,6 +106,33 @@ def _final_answer(text: str) -> str:
     return text.strip()
 
 
+MAKE_PROMPT = """You are an experienced Armenian math teacher. Lesson {lesson_id} «{title}» of a grade {grade}
+textbook has too few homework problems with a checkable answer. Write {count} NEW problems for it, in Armenian,
+in the style and difficulty of the lesson below, using only what the lesson teaches.
+Each problem must be solvable from its text alone (describe any figure in words with all needed lengths/angles —
+no drawing or measuring), must have ONE checkable final answer (number(s), a comparison sign, yes/no, or a short
+word), and must differ from the problems already in the lesson. Do not include answers or solutions.
+Respond with JSON: {{"exercises": [{{"text": "<problem>"}}]}}
+
+LESSON TEXT:
+{text}"""
+
+MIN_PER_LESSON = 4
+
+
+async def make(grade: str, lesson: dict, count: int, cache) -> list[dict]:
+    path = cache / f"make-{lesson['id']}.json"
+    if not path.is_file():
+        async with _slots:
+            data = await complete_json(
+                MAKE_PROMPT.format(lesson_id=lesson["id"], title=lesson["title"], grade=grade, count=count,
+                                   text=_lesson_text(grade, lesson)),
+                model=PICK_MODEL, max_tokens=8000,
+            ) or {}
+        path.write_text(json.dumps(data.get("exercises", []), ensure_ascii=False, indent=1), encoding="utf-8")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 AGREE_PROMPT = """Problem: {problem}
 Answer A: {a}
 Answer B: {b}
@@ -153,13 +182,32 @@ async def build(grade: str) -> list[dict]:
             print(f"  checked {done}/{len(jobs)}", flush=True)
         return lesson, text, a, ok
 
-    results = await asyncio.gather(*(check(l, e) for l, e in jobs))
+    results = [(*r, "textbook") for r in await asyncio.gather(*(check(l, e) for l, e in jobs))]
+    kept = {l["id"]: 0 for l in lessons}
+    for lesson, _, _, ok, _ in results:
+        kept[lesson["id"]] += ok
+
+    short = [(l, MIN_PER_LESSON - kept[l["id"]]) for l in lessons if kept[l["id"]] < MIN_PER_LESSON]
+    if short:
+        print(f"{len(short)} lessons have fewer than {MIN_PER_LESSON} exercises; writing teacher-made ones …", flush=True)
+        made = await asyncio.gather(*(make(grade, l, n + 2, cache) for l, n in short))  # +2: some won't pass the check
+        extra_jobs = [(l, {"number": "", "text": e["text"]}, n) for (l, n), exs in zip(short, made)
+                      for e in exs if str(e.get("text", "")).strip()]
+        done, jobs = 0, extra_jobs
+        checked = await asyncio.gather(*(check(l, e) for l, e, _ in extra_jobs))
+        need = {l["id"]: n for l, n in short}
+        for r in checked:
+            if r[3] and need[r[0]["id"]] > 0:
+                need[r[0]["id"]] -= 1
+                results.append((*r, "ai-made"))
+
     bank = []
-    for lesson, text, answer, ok in results:
+    for lesson, text, answer, ok, origin in results:
         if not ok:
             continue
         chapter_title = titles.get(lesson["chapter_file"], "")
         bank.append({
+            "origin": origin,
             "id": len(bank) + 1,
             "chapter_num": int(lesson["chapter"]),
             "chapter_title_hy": chapter_title,
@@ -171,7 +219,8 @@ async def build(grade: str) -> list[dict]:
             "answer_keywords": [],
             "answer_source": "ai-verified",
         })
-    print(f"kept {len(bank)}/{len(jobs)} exercises where both solutions agree")
+    made_count = sum(e["origin"] == "ai-made" for e in bank)
+    print(f"kept {len(bank) - made_count} textbook exercises and {made_count} teacher-made ones (both solutions agree)")
     return bank
 
 
