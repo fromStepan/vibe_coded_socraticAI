@@ -45,6 +45,17 @@ Needs `uv` and `pnpm` (both already installed on this Mac) and an API key in `.e
 5. **Answer check** (`prompts/answer_compare.md`) runs on the "I know the answer" button *and* on normal chat
    messages, so a correct answer is recognised however the student writes it.
 
+## Photo of a homework problem
+
+On the New task page, **📷** takes a photo (it opens the camera on a phone) or picks an image.
+- `PHOTO_MODEL` (default `gpt-5.5`) writes out the problem(s) exactly (`prompts/photo_transcribe.md`), marking
+  unreadable parts as [?] and never solving.
+- If the photo shows a **textbook exercise**, its number and wording are matched against the corrected book, and
+  the book's exact text is used instead («✓ Այս խնդիրը գտա դասագրքում»). Photo reading can misread small digits
+  (2/7 → 2/5), so this matters.
+- Anything else stays as read, with a reminder for the student to check the numbers before starting.
+- If there are several problems, the student picks one. The photo itself is not stored.
+
 ## Voice (read aloud)
 
 Every tutor reply has a **🔊 Լսել** button, and the chat has an **Ավտոմատ** switch (reads each new reply

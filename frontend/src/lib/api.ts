@@ -129,6 +129,8 @@ export const api = {
   updateMe: (data: { displayName?: string; grade?: string; currentPassword?: string; newPassword?: string }) =>
     patch<User>('/api/auth/me', data),
 
+  problemFromPhoto: (image: string, grade?: string) =>
+    post<{ problems: { text: string; fromBook: boolean }[]; unreadable: boolean }>('/api/problem-from-photo', { image, grade }),
   exercises: (grade?: string) => get<Exercise[]>(`/api/exercises${grade ? `?grade=${grade}` : ''}`),
   conversations: () => get<ConversationSummary[]>('/api/conversations'),
   conversation: (id: string) => get<ConversationDetail>(`/api/conversations/${id}`),

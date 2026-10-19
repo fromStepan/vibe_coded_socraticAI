@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
-import { BookOpen, ChevronLeft, GraduationCap, Loader2, Mic, MicOff, PenLine, Search, Sparkles } from 'lucide-react';
+import { BookOpen, Camera, ChevronLeft, GraduationCap, Loader2, Mic, MicOff, PenLine, Search, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { photoToDataUrl } from '@/lib/photo';
 import { useCurrentUser } from '@/lib/auth';
 import { useLoad } from '@/hooks/use-load';
 import { useSpeechInput } from '@/hooks/use-speech-input';
@@ -32,6 +33,33 @@ export default function NewTask() {
       setGrade((g) => (c.grades.includes(g) ? g : user.grade));
     }).catch(() => undefined);
   }, [isAdmin, user.grade]);
+
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [reading, setReading] = useState(false);
+  const [photoChoices, setPhotoChoices] = useState<{ text: string; fromBook: boolean }[] | null>(null);
+  const [photoNote, setPhotoNote] = useState<'book' | 'check' | null>(null);
+
+  const readPhoto = async (file: File) => {
+    setReading(true);
+    setPhotoChoices(null);
+    setPhotoNote(null);
+    try {
+      const { problems, unreadable } = await api.problemFromPhoto(await photoToDataUrl(file), isAdmin ? grade : undefined);
+      if (problems.length === 0) {
+        toast.error('Նկարում խնդիր չգտա։ Փորձիր նկարել ավելի մոտիկից և լավ լույսով։');
+      } else if (problems.length === 1) {
+        setText(problems[0].text);
+        setPhotoNote(problems[0].fromBook ? 'book' : 'check');
+      } else {
+        setPhotoChoices(problems);
+      }
+      if (unreadable && problems.length) toast('Նկարի մի մասը չկարողացա կարդալ՝ նշել եմ [?]-ով։');
+    } catch (e) {
+      toast.error((e as Error).message || 'Չհաջողվեց կարդալ նկարը');
+    } finally {
+      setReading(false);
+    }
+  };
 
   const chooseGrade = (g: string) => {
     localStorage.setItem(ADMIN_GRADE_KEY, g);
@@ -109,18 +137,51 @@ export default function NewTask() {
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              disabled={busy !== null}
-              placeholder="Տեղադրիր կամ գրիր տնայինդ..."
-              className="w-full min-h-[200px] p-5 rounded-2xl bg-secondary/30 border-2 border-secondary focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10 outline-none transition-all resize-none text-lg text-foreground placeholder:text-muted-foreground/70 disabled:opacity-60"
+              disabled={busy !== null || reading}
+              placeholder="Տեղադրիր կամ գրիր տնայինդ, կամ նկարիր այն 📷"
+              className="w-full min-h-[200px] p-5 pb-16 rounded-2xl bg-secondary/30 border-2 border-secondary focus:border-primary/50 focus:bg-white focus:ring-4 focus:ring-primary/10 outline-none transition-all resize-none text-lg text-foreground placeholder:text-muted-foreground/70 disabled:opacity-60"
             />
-            {speech.isSupported && (
-              <button onClick={speech.toggle} title="Խոսիր" className={cn(
-                'absolute bottom-4 right-4 w-10 h-10 rounded-xl border shadow-sm flex items-center justify-center transition-colors',
-                speech.isRecording ? 'bg-destructive text-white animate-pulse' : 'bg-white text-muted-foreground hover:text-primary hover:border-primary/30')}>
-                {speech.isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-              </button>
+            {reading && (
+              <div className="absolute inset-0 rounded-2xl bg-white/80 flex flex-col items-center justify-center gap-2 text-primary font-bold">
+                <Loader2 className="w-7 h-7 animate-spin" /> Կարդում եմ նկարը…
+              </div>
             )}
+            <div className="absolute bottom-4 right-4 flex items-center gap-2">
+              <input ref={photoInput} type="file" accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) readPhoto(f); }} />
+              <button onClick={() => photoInput.current?.click()} disabled={busy !== null || reading} title="Նկարիր խնդիրը"
+                className="w-10 h-10 rounded-xl bg-white border shadow-sm flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/30 transition-colors disabled:opacity-50">
+                <Camera className="w-5 h-5" />
+              </button>
+              {speech.isSupported && (
+                <button onClick={speech.toggle} title="Խոսիր" className={cn(
+                  'w-10 h-10 rounded-xl border shadow-sm flex items-center justify-center transition-colors',
+                  speech.isRecording ? 'bg-destructive text-white animate-pulse' : 'bg-white text-muted-foreground hover:text-primary hover:border-primary/30')}>
+                  {speech.isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                </button>
+              )}
+            </div>
           </div>
+
+          {photoChoices && (
+            <div className="space-y-2">
+              <div className="text-sm font-bold text-foreground">Նկարում մի քանի խնդիր կա։ Ո՞րն ես ուզում լուծել</div>
+              {photoChoices.map((p, i) => (
+                <button key={i} onClick={() => { setText(p.text); setPhotoNote(p.fromBook ? 'book' : 'check'); setPhotoChoices(null); }}
+                  className="w-full text-left p-3 rounded-xl border bg-white hover:border-primary/40 text-sm font-medium whitespace-pre-line line-clamp-3">
+                  {p.text}
+                </button>
+              ))}
+            </div>
+          )}
+          {photoNote && !photoChoices && (
+            <p className={cn('text-sm font-medium rounded-xl px-3 py-2',
+              photoNote === 'book' ? 'bg-success/10 text-green-700' : 'bg-warning/15 text-warning-foreground')}>
+              {photoNote === 'book'
+                ? '✓ Այս խնդիրը գտա դասագրքում և վերցրի ճշգրիտ տեքստը։'
+                : '👀 Ստուգիր, որ ճիշտ եմ կարդացել նկարը (հատկապես թվերը), և ուղղիր, եթե պետք է։'}
+            </p>
+          )}
 
           {text.length === 0 && (
             <button onClick={() => setText(EXAMPLE)} className="text-sm text-primary font-medium flex items-center gap-1.5 hover:underline">

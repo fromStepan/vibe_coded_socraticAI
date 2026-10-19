@@ -80,6 +80,38 @@ def lesson_excerpt(grade: str, lesson_id: str, chars: int) -> str:
     return re.sub(r"\s+", " ", body).strip()[:chars]
 
 
+@lru_cache(maxsize=None)
+def _textbook_exercises(grade: str) -> dict[str, list[str]]:
+    """Exercise number -> candidate statements in the corrected textbook ("586" -> ["586. Կատարե՛ք …"]).
+    Several candidates because lines like "828 · 882" inside other exercises also start with a number."""
+    found: dict[str, list[str]] = {}
+    for l in lessons(grade):
+        text = (_grade_dir(grade) / l["file"]).read_text(encoding="utf-8").split("## Ուսուցչի ուղեցույց")[0]
+        for block in re.split(r"(?m)^(?=\d{1,4}\s*[.)]?\s+\S)", text):
+            if m := re.match(r"(\d{1,4})\s*[.)]?\s", block):
+                found.setdefault(m.group(1), []).append(re.split(r"\n#+ ", block.strip())[0].strip())
+    return found
+
+
+def _plain_words(text: str) -> set[str]:
+    return set(_words(re.sub(r"[՛՞՜]", "", text)))
+
+
+def textbook_version(grade: str, transcribed: str, threshold: float = 0.6) -> str | None:
+    """The book's exact text for a photographed textbook exercise, if the photo reading matches one closely."""
+    m = re.match(r"\s*(\d{1,4})\s*[.)]?\s", transcribed)
+    if not m:
+        return None
+    seen = _plain_words(transcribed)
+    best, score = None, 0.0
+    for book in _textbook_exercises(grade).get(m.group(1), []):
+        words = _plain_words(book)
+        s = len(seen & words) / max(1, min(len(seen), len(words)))
+        if s > score:
+            best, score = book, s
+    return best if score >= threshold else None
+
+
 def lesson_containing(grade: str, problem: str, threshold: float = 0.6) -> str | None:
     """The lesson whose exercises contain this problem (most of its 4-word phrases), if any."""
     words = _words(re.sub(r"^\s*\d+\s*[.)]\s*", "", problem))

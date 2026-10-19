@@ -42,6 +42,8 @@ JUDGE_MODEL = os.environ.get("JUDGE_MODEL") or TUTOR_MODEL
 # Picks the lesson once per conversation, so a stronger model costs little.
 ROUTER_MODEL = os.environ.get("ROUTER_MODEL") or JUDGE_MODEL
 ROUTER_EXCERPT_CHARS = int(os.environ.get("ROUTER_EXCERPT_CHARS", "0"))
+# Reads homework photos; needs a vision-capable model.
+PHOTO_MODEL = os.environ.get("PHOTO_MODEL") or ("gpt-5.5" if LLM_PROVIDER == "openai" else TUTOR_MODEL)
 
 MAX_LEAK_RETRIES = int(os.environ.get("MAX_LEAK_RETRIES", "2"))
 

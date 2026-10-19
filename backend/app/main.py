@@ -184,6 +184,25 @@ def list_exercises(grade: str | None = None, user: dict = Depends(auth.current_u
     return content.public_exercises(_check_grade(grade or user["grade"]))
 
 
+# ---------- homework photo ----------
+
+class PhotoBody(BaseModel):
+    image: str = Field(max_length=12_000_000, pattern=r"^data:image/(jpeg|png|webp);base64,")
+    grade: str | None = None
+
+
+@app.post("/api/problem-from-photo")
+async def problem_from_photo(body: PhotoBody, user: dict = Depends(auth.current_user)):
+    """Only transcribes; the photo itself is not stored."""
+    grade = body.grade if (body.grade and user["role"] == "admin") else user["grade"]
+    try:
+        return await tutor.read_photo(body.image, _check_grade(grade))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _llm_error(e)
+
+
 # ---------- conversations ----------
 
 class StartBody(BaseModel):

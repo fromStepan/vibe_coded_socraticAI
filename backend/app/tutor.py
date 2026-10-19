@@ -6,13 +6,14 @@ Every graded reply passes a layered no-answer guardrail before the student sees 
   3. LLM-as-judge leak check   — prompts/leak_check.md
   4. regenerate on a scratch copy with prompts/leak_retry_notice.md, then a canned fallback
 """
+import json
 import logging
 import re
 from dataclasses import dataclass, field
 from fractions import Fraction
 
 from . import content, prompts
-from .config import JUDGE_MODEL, MAX_LEAK_RETRIES, ROUTER_EXCERPT_CHARS, ROUTER_MODEL, TUTOR_MODEL
+from .config import JUDGE_MODEL, MAX_LEAK_RETRIES, PHOTO_MODEL, ROUTER_EXCERPT_CHARS, ROUTER_MODEL, TUTOR_MODEL
 from .llm import complete, complete_json, complete_with_calculator, extra_body
 
 log = logging.getLogger("tutor.pipeline")
@@ -102,6 +103,32 @@ async def is_correct_final_answer(problem: str, correct_answer: str, student_ans
     )
     # Unreadable verdict -> "incorrect": wrongly praising a wrong answer is worse than asking again.
     return bool(data and data.get("correct") is True)
+
+
+async def read_photo(image_data_url: str, grade: str) -> dict:
+    """Transcribes the problem(s) in a homework photo. The student confirms/edits the text before starting."""
+    response = await complete(
+        model=PHOTO_MODEL,
+        messages=[{"role": "user", "content": [
+            {"type": "text", "text": prompts.render("photo_transcribe.md", grade=grade)},
+            {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
+        ]}],
+        max_tokens=4000,
+        response_format={"type": "json_object"},
+    )
+    try:
+        data = json.loads(response.choices[0].message.content or "{}")
+    except json.JSONDecodeError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    problems = []
+    for p in (str(p).strip() for p in data.get("problems", [])):
+        if p:
+            # Photo reading misreads small digits; a textbook exercise is replaced by the book's verified text.
+            book = content.textbook_version(grade, p)
+            problems.append({"text": book or p, "fromBook": bool(book)})
+    return {"problems": problems[:10], "unreadable": bool(data.get("unreadable"))}
 
 
 # ---------- system prompts ----------
