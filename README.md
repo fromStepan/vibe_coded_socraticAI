@@ -134,6 +134,14 @@ grade for that test chat.
 
 The original PDFs stay where they are (e.g. on the Desktop). Only the cleaned text is copied into the project.
 
+## Two repositories
+
+- **Private, everything:** [nodeStepan/vibe_coded_socraticAI](https://github.com/nodeStepan/vibe_coded_socraticAI)
+  (`git push`).
+- **Public, without the copyrighted textbook and guide text:**
+  [fromStepan/vibe_coded_socraticAI](https://github.com/fromStepan/vibe_coded_socraticAI). Update it with
+  `./scripts/publish_public.sh` after pushing; it removes the book text from the whole history before uploading.
+
 ## Layout
 
 ```
