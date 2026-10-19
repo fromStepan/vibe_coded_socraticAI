@@ -17,6 +17,20 @@ Then open **http://localhost:5173**.
 
 Needs `uv` and `pnpm` (both already installed on this Mac) and an API key in `.env` (see `.env.example`).
 
+## Open it on phones and other devices
+
+```bash
+./share.sh
+```
+
+This prints a link like `https://xxxx.trycloudflare.com` that works on any device, anywhere, with https, so the
+microphone works on phones too.
+- It works while this Mac is on and that window stays open. Ctrl+C closes the link.
+- It keeps the Mac awake while sharing.
+- **The link is new every time** you run it.
+- It serves the finished build of the app. Prompt edits apply immediately; after changing app code, run
+  `./share.sh` again.
+
 ## What each role sees
 
 | | Student | Admin |
